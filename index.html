@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Render Workflow Assistant | CAD/BIM to AI Visualization</title>
+  
+  <style>
+    :root {
+      --bg-primary: #0a0d14;
+      --bg-secondary: #121722;
+      --bg-tertiary: #1a2232;
+      --bg-card: rgba(22, 30, 44, 0.75);
+      --border-subtle: #243046;
+      --border-focus: #38bdf8;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --accent-cyan: #38bdf8;
+      --accent-indigo: #6366f1;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+      --transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg-primary);
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.04) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(99, 102, 241, 0.04) 0%, transparent 40%),
+        linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Top Bar */
+    header {
+      background: rgba(10, 13, 20, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-subtle);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .brand { display: flex; align-items: center; gap: 0.75rem; }
+    .brand-icon {
+      width: 34px; height: 34px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo));
+      display: flex; align-items: center; justify-content: center;
+      color: #000; font-weight: 800; font-size: 1rem;
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.35);
+    }
+    .brand-title {
+      font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em;
+      color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;
+    }
+    .brand-tag {
+      font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em;
+      padding: 2px 6px; background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--accent-cyan); border-radius: 4px; font-weight: 600;
+    }
+    .header-actions { display: flex; align-items: center; gap: 0.75rem; }
+    
+    .badge-btn {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      font-size: 0.8rem; padding: 0.35rem 0.75rem;
+      background: var(--bg-tertiary); border: 1px solid var(--border-subtle);
+      border-radius: 20px; color: var(--text-muted); cursor: pointer;
+      transition: var(--transition);
+    }
+    .badge-btn:hover { border-color: var(--accent-cyan); color: var(--text-main); }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-rose); }
+    .status-dot.active { background: var(--accent-emerald); box-shadow: 0 0 8px var(--accent-emerald); }
+
+    .app-container {
+      max-width: 1600px; width: 100%; margin: 0 auto; padding: 1.5rem;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; flex: 1;
+      padding-bottom: 6rem; /* Make room for sticky dock */
+    }
+    @media (max-width: 1024px) { .app-container { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: var(--bg-card); backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg); padding: 1.25rem; display: flex;
+      flex-direction: column; gap: 1.25rem; box-shadow: var(--shadow-lg);
+    }
+    .panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.75rem;
+    }
+    .panel-title {
+      font-size: 0.95rem; font-weight: 600; color: var(--text-main);
+      display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.01em;
+    }
+    .step-pill {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 20px; height: 20px; background: var(--accent-cyan); color: #000;
+      border-radius: 50%; font-size: 0.7rem; font-weight: 700;
+    }
+
+    /* Clipboard Ingestion Area */
+    .viewport-box {
+      border: 2px dashed var(--border-subtle); border-radius: var(--radius-md);
+      background: rgba(14, 20, 31, 0.6); min-height: 250px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      position: relative; overflow: hidden; cursor: pointer; transition: var(--transition);
+    }
+    .viewport-box:hover, .viewport-box.drag-over {
+      border-color: var(--accent-cyan); background: rgba(56, 189, 248, 0.04);
+    }
+    .viewport-placeholder {
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+      padding: 2rem 1.5rem; gap: 0.75rem; pointer-events: none;
+    }
+    .paste-badge {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 0.35rem 0.8rem; border-radius: 20px; font-size: 0.8rem;
+      font-weight: 600; color: var(--accent-cyan);
+    }
+    .kbd {
+      background: var(--bg-tertiary); border: 1px solid var(--border-subtle);
+      padding: 2px 6px; border-radius: 4px; font-family: var(--font-mono);
+      font-size: 0.75rem; color: #fff;
+    }
+    .viewport-img-container { width: 100%; height: 100%; display: none; position: relative; background: #000; }
+    .viewport-preview { width: 100%; height: 320px; object-fit: contain; display: block; }
+    .viewport-meta {
+      position: absolute; bottom: 8px; left: 8px; background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px); padding: 4px 10px; border-radius: var(--radius-sm);
+      font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.1); display: flex; gap: 0.75rem;
+    }
+    .viewport-controls { position: absolute; top: 8px; right: 8px; display: flex; gap: 0.5rem; }
+    
+    .icon-btn {
+      background: rgba(18, 23, 34, 0.85); backdrop-filter: blur(8px);
+      border: 1px solid var(--border-subtle); color: var(--text-muted);
+      width: 32px; height: 32px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: var(--transition);
+    }
+    .icon-btn:hover { background: var(--accent-cyan); color: #000; border-color: var(--accent-cyan); }
+    .icon-btn.danger:hover { background: var(--accent-rose); color: #fff; border-color: var(--accent-rose); }
+
+    .field-group { display: flex; flex-direction: column; gap: 0.4rem; flex: 1; }
+    .field-label {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 0.8rem; font-weight: 600; color: var(--text-muted); letter-spacing: 0.02em;
+    }
+    .field-tag { font-size: 0.68rem; font-weight: 500; padding: 2px 6px; border-radius: 4px; }
+    .tag-dynamic { background: rgba(56, 189, 248, 0.15); color: var(--accent-cyan); border: 1px solid rgba(56, 189, 248, 0.3); }
+    .tag-persistent { background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3); }
+    
+    textarea {
+      width: 100%; background: rgba(14, 20, 31, 0.8); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md); color: var(--text-main); padding: 0.75rem;
+      font-size: 0.85rem; font-family: inherit; resize: vertical; 
+      min-height: 200px; /* Made much taller for right panel */
+      height: 100%; line-height: 1.45; transition: var(--transition);
+    }
+    textarea:focus { outline: none; border-color: var(--accent-cyan); box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2); }
+    
+    .chips-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.25rem; }
+    .chip {
+      font-size: 0.72rem; padding: 3px 8px; border-radius: 12px;
+      background: var(--bg-tertiary); border: 1px solid var(--border-subtle);
+      color: var(--text-muted); cursor: pointer; transition: var(--transition);
+    }
+    .chip:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); background: rgba(56, 189, 248, 0.08); }
+    
+    .preset-bar { display: flex; align-items: center; gap: 0.5rem; }
+    select {
+      background: var(--bg-tertiary); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm); color: var(--text-main);
+      padding: 0.3rem 0.6rem; font-size: 0.75rem; outline: none; cursor: pointer;
+      max-width: 200px;
+    }
+
+    .preset-action-btn {
+      background: var(--bg-tertiary); border: 1px solid var(--border-subtle);
+      color: var(--text-muted); width: 26px; height: 26px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center; font-size: 1rem;
+      cursor: pointer; transition: var(--transition);
+    }
+    .preset-action-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+    .preset-action-btn.delete:hover { border-color: var(--accent-rose); color: var(--accent-rose); }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+      font-size: 0.88rem; font-weight: 600; padding: 0.7rem 1.25rem;
+      border-radius: var(--radius-md); cursor: pointer; transition: var(--transition); border: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo));
+      color: #000; font-weight: 700; box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3);
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(56, 189, 248, 0.45); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-secondary { background: var(--bg-tertiary); border: 1px solid var(--border-subtle); color: var(--text-main); }
+    .btn-secondary:hover { background: #242f44; border-color: var(--accent-cyan); }
+    .btn-emerald { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: var(--accent-emerald); }
+    .btn-emerald:hover { background: rgba(16, 185, 129, 0.25); border-color: var(--accent-emerald); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+    .output-card {
+      background: rgba(11, 15, 23, 0.85); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md); padding: 1rem; display: flex; flex-direction: column;
+      gap: 0.75rem; flex: 1; min-height: 250px; position: relative; margin-top: 0.5rem;
+    }
+    .output-header {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding-bottom: 0.5rem;
+    }
+    .output-title { font-size: 0.8rem; font-weight: 600; color: var(--accent-cyan); }
+    .output-body {
+      font-family: var(--font-mono); font-size: 0.82rem; color: #e2e8f0;
+      line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+      overflow-y: auto; max-height: 400px; padding-right: 0.5rem;
+    }
+    .empty-output-state {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 150px; color: var(--text-dim); text-align: center; gap: 0.75rem; font-size: 0.85rem;
+    }
+
+    /* Sticky Export Dock */
+    .sticky-dock-wrapper {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 0;
+      width: 100%;
+      pointer-events: none; /* Let clicks pass through empty space */
+      display: flex;
+      justify-content: center;
+      z-index: 90;
+      padding: 0 1.5rem;
+    }
+
+    .export-dock {
+      background: rgba(18, 23, 34, 0.95); backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle); border-radius: var(--radius-lg);
+      padding: 0.85rem 1.25rem; display: flex; align-items: center; justify-content: space-between;
+      gap: 1.5rem; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(56, 189, 248, 0.15);
+      pointer-events: auto; max-width: 1200px; width: 100%;
+    }
+    .workflow-steps-mini { display: flex; align-items: center; gap: 0.75rem; }
+    .workflow-step-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--text-muted); font-weight: 500;}
+    .workflow-step-num {
+      width: 20px; height: 20px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; font-weight: 700; color: var(--accent-cyan);
+    }
+    .step-arrow { color: var(--border-subtle); font-size: 0.85rem; }
+    .export-actions { display: flex; align-items: center; gap: 0.75rem; }
+
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center; z-index: 100;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s ease; padding: 1rem;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: auto; }
+    .modal {
+      background: var(--bg-secondary); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg); max-width: 520px; width: 100%;
+      padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; box-shadow: var(--shadow-lg);
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.75rem;
+    }
+    .modal-title { font-size: 1.05rem; font-weight: 700; }
+
+    .toast-container {
+      position: fixed; bottom: 90px; right: 24px; display: flex; flex-direction: column;
+      gap: 0.5rem; z-index: 1000; pointer-events: none;
+    }
+    .toast {
+      background: rgba(18, 23, 34, 0.95); backdrop-filter: blur(12px);
+      border: 1px solid var(--border-subtle); padding: 0.75rem 1.25rem;
+      border-radius: var(--radius-md); color: var(--text-main); font-size: 0.85rem;
+      display: flex; align-items: center; gap: 0.75rem; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      animation: toastIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; pointer-events: auto;
+    }
+    .toast.success { border-color: rgba(16, 185, 129, 0.4); }
+    .toast.success::before { content: "✓"; color: var(--accent-emerald); font-weight: bold; }
+    .toast.info { border-color: rgba(56, 189, 248, 0.4); }
+    .toast.info::before { content: "ℹ"; color: var(--accent-cyan); font-weight: bold; }
+    .toast.error { border-color: rgba(244, 63, 94, 0.4); }
+    .toast.error::before { content: "⚠"; color: var(--accent-rose); font-weight: bold; }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(12px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .spinner {
+      width: 18px; height: 18px; border: 2px solid rgba(0, 0, 0, 0.3);
+      border-top-color: #000; border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .input-text {
+      background: var(--bg-tertiary); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm); padding: 0.6rem 0.8rem; color: var(--text-main);
+      font-size: 0.85rem; outline: none; width: 100%;
+    }
+    .input-text:focus { border-color: var(--accent-cyan); }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header Navigation -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+          <polyline points="2 17 12 22 22 17"></polyline>
+          <polyline points="2 12 12 17 22 12"></polyline>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">
+          Render Workflow Assistant
+          <span class="brand-tag">Client-Side Engine</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button class="badge-btn" id="apiKeyStatusBtn" onclick="openSettingsModal()">
+        <span class="status-dot" id="apiKeyStatusDot"></span>
+        <span id="apiKeyStatusText">Set Gemini API Key</span>
+      </button>
+
+      <button class="badge-btn" onclick="openGuideModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        Workflow Guide
+      </button>
+    </div>
+  </header>
+
+  <main class="app-container">
+    
+    <!-- LEFT PANEL: Image Ingestion & Output -->
+    <section class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span class="step-pill">1</span>
+          Reference Viewport & Analysis
+        </div>
+        <button class="chip" onclick="loadSampleCadImage()">Load Sample Model</button>
+      </div>
+
+      <!-- Viewport Paste Zone -->
+      <div class="viewport-box" id="viewportDropzone">
+        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+        
+        <div class="viewport-placeholder" id="viewportPlaceholder">
+          <div class="paste-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+            </svg>
+            Global Paste Enabled
+          </div>
+          <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-main);">
+            Press <span class="kbd">Ctrl + V</span> or <span class="kbd">Cmd + V</span> anywhere
+          </div>
+          <div style="font-size: 0.78rem; color: var(--text-muted); max-width: 320px;">
+            Paste screenshot directly from Rhino, Revit, SketchUp, ArchiCAD, or drag & drop image here
+          </div>
+        </div>
+
+        <div class="viewport-img-container" id="viewportContainer">
+          <img id="viewportImg" class="viewport-preview" alt="CAD Viewport Reference">
+          <div class="viewport-meta" id="viewportMeta">
+            <span id="metaDimensions">0 × 0 px</span>
+            <span id="metaAspect">Aspect: --</span>
+          </div>
+          <div class="viewport-controls">
+            <button class="icon-btn danger" title="Clear image" onclick="clearLoadedImage()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Synthesis Parameters Bar -->
+      <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.25rem;">
+        <div style="display: flex; align-items: center; gap: 0.4rem; width: 100%;">
+          <label style="color: var(--text-muted); font-size: 0.75rem; width: 45px;">Model:</label>
+          <select id="geminiModelSelect" onchange="saveSelectedModel()" style="flex: 1; max-width: none;">
+            <option value="">Tilføj API Nøgle for at hente modeller...</option>
+          </select>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.4rem; width: 100%;">
+          <label style="color: var(--text-muted); font-size: 0.75rem; width: 45px;">Words:</label>
+          <input type="number" id="wordCountInput" class="input-text" placeholder="e.g. 150" style="flex: 1; padding: 0.3rem 0.6rem;" onchange="saveWordCount()">
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button class="btn btn-primary" id="synthesizeBtn" onclick="runVisionSynthesis()" style="width: 100%;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"></path>
+        </svg>
+        <span id="synthesizeBtnText">Synthesize Rendering Master Prompt</span>
+      </button>
+
+      <!-- OUTPUT CARD NOW IN LEFT PANEL -->
+      <div class="output-card">
+        <div class="output-header">
+          <div class="output-title">Synthesized Master Prompt</div>
+          <span style="font-size: 0.72rem; color: var(--text-dim);" id="promptWordCount">0 words</span>
+        </div>
+
+        <div class="output-body" id="outputBody">
+          <div class="empty-output-state" id="emptyOutputState">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <div>
+              <strong>Waiting for Synthesis...</strong>
+              <div style="font-size: 0.75rem; margin-top: 4px;">The AI will analyze the image and generate a single unified prompt containing both visual context and your text rules.</div>
+            </div>
+          </div>
+          <div id="textContentDisplay" style="display: none;"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- RIGHT PANEL: Dual-Prompt Matrix (Taller Text Areas) -->
+    <section class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span class="step-pill">2</span>
+          The Dual-Prompt Matrix
+        </div>
+        
+        <!-- Updated Preset Bar with Add/Delete Buttons -->
+        <div class="preset-bar">
+          <span style="font-size: 0.75rem; color: var(--text-muted);">Rules:</span>
+          <select id="presetSelect" onchange="loadSelectedPreset()">
+            <!-- Custom presets injected here -->
+          </select>
+          <button class="preset-action-btn" onclick="addNewCustomPreset()" title="Save current Text B as a new preset">+</button>
+          <button class="preset-action-btn delete" onclick="deleteCurrentCustomPreset()" title="Delete selected custom preset">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Text A: Dynamic Request -->
+      <div class="field-group">
+        <div class="field-label">
+          <span>TEXT A: DYNAMIC PROJECT REQUEST</span>
+          <span class="field-tag tag-dynamic">Per-Render Variables</span>
+        </div>
+        <textarea id="textA" placeholder="Example: Convert this massing into a writer's retreat cabin situated in a dense forest, overcast autumn lighting, damp ground with fallen amber leaves."></textarea>
+      </div>
+
+      <!-- Text B: Persistent Baseline -->
+      <div class="field-group">
+        <div class="field-label">
+          <span>TEXT B: PERSISTENT ARCHITECTURAL BASELINE</span>
+          <span class="field-tag tag-persistent">Saved Automatically</span>
+        </div>
+        <textarea id="textB" placeholder="Persistent foundational architectural rules..."></textarea>
+      </div>
+
+    </section>
+  </main>
+
+  <div class="sticky-dock-wrapper">
+    <div class="export-dock">
+      <div class="workflow-steps-mini">
+        <div class="workflow-step-item">
+          <span class="workflow-step-num">1</span>
+          <span>Copy Image</span>
+        </div>
+        <span class="step-arrow">➔</span>
+        <div class="workflow-step-item">
+          <span class="workflow-step-num">2</span>
+          <span>Copy Prompt</span>
+        </div>
+        <span class="step-arrow">➔</span>
+        <div class="workflow-step-item">
+          <span class="workflow-step-num">3</span>
+          <span>Paste in Gemini</span>
+        </div>
+      </div>
+
+      <div class="export-actions">
+        <!-- Copy Image Button -->
+        <button class="btn btn-secondary" style="border-color: var(--accent-cyan); background: rgba(56, 189, 248, 0.05);" onclick="copyImageToClipboard()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+          <span style="color: var(--accent-cyan);">Copy Image</span>
+        </button>
+
+        <!-- Copy Text Button -->
+        <button class="btn btn-emerald" id="copyPromptDockBtn" onclick="copySynthesizedPrompt()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Copy Prompt
+        </button>
+
+        <a href="https://gemini.google.com/app" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="text-decoration: none;">
+          <span>Open Gemini</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- API Key & Settings Modal -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Google Gemini API Configuration</div>
+        <button class="icon-btn" onclick="closeSettingsModal()">✕</button>
+      </div>
+
+      <div style="font-size: 0.82rem; color: var(--text-muted);">
+        The Render Workflow Assistant uses Google AI Studio Free Tier to analyze your images and synthesize prompts locally. Your key is stored strictly in your browser's <code class="kbd">localStorage</code>.
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Google Gemini API Key</label>
+        <input type="password" class="input-text" id="apiKeyInput" placeholder="AIzaSy...">
+        <div style="font-size: 0.72rem; color: var(--text-dim); margin-top: 4px;">
+          Don't have a key? <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: var(--accent-cyan); text-decoration: underline;">Get a free API key at Google AI Studio</a> (takes ~15 seconds).
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.5rem;">
+        <button class="btn btn-primary" onclick="saveApiKey()">Save & Fetch Models</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Workflow Guide Modal -->
+  <div class="modal-overlay" id="guideModal">
+    <div class="modal" style="max-width: 600px;">
+      <div class="modal-header">
+        <div class="modal-title">How to Export to Gemini</div>
+        <button class="icon-btn" onclick="closeGuideModal()">✕</button>
+      </div>
+
+      <div style="font-size: 0.85rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 1rem; line-height: 1.6;">
+        <div>
+          <strong style="color: var(--accent-cyan);">The Workflow:</strong><br>
+          1. Paste your screenshot and click <strong>Synthesize</strong>.<br>
+          2. Click <strong>Copy Image</strong> and paste it (<span class="kbd">Ctrl+V</span>) into the Gemini chat box.<br>
+          3. Click <strong>Copy Prompt</strong> and paste it right next to the image in Gemini.<br>
+          4. Hit send in Gemini!
+        </div>
+        <div>
+          <strong style="color: var(--accent-cyan);">Why two steps instead of copying both at once?</strong><br>
+          Web browsers have strict security limits that prevent copying rich media (images and text combined) directly to your clipboard in a way that all web apps understand perfectly. Gemini's input field strongly prefers receiving the image and text separated. Copying them individually ensures Gemini reads both elements perfectly every time without glitching.
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end;">
+        <button class="btn btn-primary" onclick="closeGuideModal()">Understood</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Preset Modal -->
+  <div class="modal-overlay" id="newPresetModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Save Custom Preset</div>
+        <button class="icon-btn" onclick="closeNewPresetModal()">✕</button>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Preset Name</label>
+        <input type="text" class="input-text" id="newPresetNameInput" placeholder="e.g., Exterior Moody Woods" onkeydown="if(event.key === 'Enter') saveNewPresetFromModal()">
+      </div>
+      <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.5rem;">
+        <button class="btn btn-secondary" onclick="closeNewPresetModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveNewPresetFromModal()">Save Preset</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+    // State variables
+    let currentImageBase64 = null;
+    let currentImageBlob = null;
+    let activeSynthesizedPrompt = "";
+    
+    // Custom Presets Storage
+    let customPresets = {};
+
+    // Initialization
+    window.addEventListener('DOMContentLoaded', () => {
+      initLocalStorage();
+      setupPasteListener();
+      setupDropzone();
+      setupKeyboardShortcuts();
+      updateApiKeyStatusDisplay();
+    });
+
+    function initLocalStorage() {
+      // Load Custom Presets
+      const savedPresets = localStorage.getItem('render_assistant_custom_presets');
+      if (savedPresets) {
+        try {
+          customPresets = JSON.parse(savedPresets);
+        } catch(e) { customPresets = {}; }
+      }
+      renderCustomPresetsDropdown();
+
+      // Load or set Text B
+      const savedTextB = localStorage.getItem('render_assistant_text_b');
+      const textBElement = document.getElementById('textB');
+      if (savedTextB) {
+        textBElement.value = savedTextB;
+      } else {
+        textBElement.value = "";
+      }
+      const savedModel = localStorage.getItem('render_assistant_gemini_model');
+      if (savedModel) {
+        document.getElementById('geminiModelSelect').value = savedModel;
+      }
+      
+      // Load saved word count
+      const savedWordCount = localStorage.getItem('render_assistant_word_count');
+      if (savedWordCount) {
+        document.getElementById('wordCountInput').value = savedWordCount;
+      } else {
+        document.getElementById('wordCountInput').value = "150";
+      }
+    }
+
+    function saveWordCount() {
+      const count = document.getElementById('wordCountInput').value;
+      localStorage.setItem('render_assistant_word_count', count);
+    }
+
+    function renderCustomPresetsDropdown() {
+      const select = document.getElementById('presetSelect');
+      select.innerHTML = '';
+      
+      const keys = Object.keys(customPresets);
+      if (keys.length === 0) {
+        const opt = document.createElement('option');
+        opt.disabled = true;
+        opt.selected = true;
+        opt.textContent = "No presets saved yet";
+        select.appendChild(opt);
+        return;
+      }
+
+      keys.forEach(key => {
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = customPresets[key].name;
+        select.appendChild(opt);
+      });
+    }
+
+    function addNewCustomPreset() {
+      const currentText = document.getElementById('textB').value.trim();
+      if (!currentText) {
+        showToast('Text B is empty!', 'error');
+        return;
+      }
+      
+      // Åbn custom modal istedet for prompt(), da prompt() blokeres i sandkassen
+      document.getElementById('newPresetNameInput').value = '';
+      document.getElementById('newPresetModal').classList.add('open');
+      setTimeout(() => document.getElementById('newPresetNameInput').focus(), 100);
+    }
+
+    function closeNewPresetModal() {
+      document.getElementById('newPresetModal').classList.remove('open');
+    }
+
+    function saveNewPresetFromModal() {
+      const currentText = document.getElementById('textB').value.trim();
+      const name = document.getElementById('newPresetNameInput').value.trim();
+      
+      if (!name) {
+        showToast('Please enter a name for the preset', 'error');
+        return;
+      }
+
+      const id = 'custom_' + Date.now();
+      customPresets[id] = { name: name, text: currentText };
+      
+      localStorage.setItem('render_assistant_custom_presets', JSON.stringify(customPresets));
+      renderCustomPresetsDropdown();
+      
+      document.getElementById('presetSelect').value = id;
+      showToast('Custom preset saved!', 'success');
+      closeNewPresetModal();
+    }
+
+    function deleteCurrentCustomPreset() {
+      const select = document.getElementById('presetSelect');
+      const choice = select.value;
+
+      if (!choice || !customPresets[choice]) {
+        showToast('No valid preset selected.', 'error');
+        return;
+      }
+
+      if (confirm(`Are you sure you want to delete the preset "${customPresets[choice].name}"?`)) {
+        delete customPresets[choice];
+        localStorage.setItem('render_assistant_custom_presets', JSON.stringify(customPresets));
+        renderCustomPresetsDropdown();
+        
+        const remainingKeys = Object.keys(customPresets);
+        if (remainingKeys.length > 0) {
+          select.value = remainingKeys[0];
+          loadSelectedPreset();
+        } else {
+          document.getElementById('textB').value = "";
+          localStorage.removeItem('render_assistant_text_b');
+        }
+        showToast('Preset deleted.', 'info');
+      }
+    }
+
+    function loadSelectedPreset() {
+      const choice = document.getElementById('presetSelect').value;
+      const textBElement = document.getElementById('textB');
+
+      if (customPresets[choice]) {
+        textBElement.value = customPresets[choice].text;
+        showToast(`Loaded preset: ${customPresets[choice].name}`, 'info');
+        localStorage.setItem('render_assistant_text_b', textBElement.value);
+      }
+    }
+
+    async function fetchAvailableModels(apiKey) {
+      try {
+        const select = document.getElementById('geminiModelSelect');
+        const currentSavedModel = localStorage.getItem('render_assistant_gemini_model');
+        select.innerHTML = '<option value="">Henter modeller fra Google...</option>';
+        
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        if (!res.ok) throw new Error('Ugyldig API nøgle eller netværksfejl');
+        
+        const data = await res.json();
+        
+        const validModels = data.models.filter(m => 
+          m.name.includes('gemini') && 
+          m.supportedGenerationMethods && 
+          m.supportedGenerationMethods.includes('generateContent')
+        );
+        
+        select.innerHTML = ''; 
+        
+        validModels.forEach(model => {
+          const modelId = model.name.replace('models/', '');
+          const option = document.createElement('option');
+          option.value = modelId;
+          option.textContent = model.displayName || modelId;
+          select.appendChild(option);
+        });
+        
+        if (currentSavedModel && select.querySelector(`option[value="${currentSavedModel}"]`)) {
+          select.value = currentSavedModel;
+        } else if (validModels.length > 0) {
+          // Foretræk nyeste modeller automatisk
+          const defaultModel = validModels.find(m => m.name.includes('1.5-pro')) || validModels.find(m => m.name.includes('1.5-flash'));
+          if(defaultModel) select.value = defaultModel.name.replace('models/', '');
+          saveSelectedModel();
+        }
+      } catch (err) {
+        console.warn('Model fetch failed, falling back:', err);
+        const select = document.getElementById('geminiModelSelect');
+        select.innerHTML = '<option value="gemini-1.5-flash">Gemini 1.5 Flash (Standard)</option><option value="gemini-1.5-pro">Gemini 1.5 Pro (Standard)</option>';
+      }
+    }
+
+    function saveSelectedModel() {
+      const model = document.getElementById('geminiModelSelect').value;
+      if(model) localStorage.setItem('render_assistant_gemini_model', model);
+    }
+
+    function setupPasteListener() {
+      window.addEventListener('paste', async (e) => {
+        const target = e.target;
+        const isInputField = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+        const clipboardItems = (e.clipboardData || window.clipboardData).items;
+        
+        let foundImage = false;
+        for (let item of clipboardItems) {
+          if (item.type.indexOf('image') !== -1) {
+            foundImage = true;
+            e.preventDefault();
+            const file = item.getAsFile();
+            processImageFile(file, "Pasted from system clipboard");
+            break;
+          }
+        }
+        if (!foundImage && isInputField) return; 
+      });
+    }
+
+    function setupDropzone() {
+      const dropzone = document.getElementById('viewportDropzone');
+      const fileInput = document.getElementById('fileInput');
+
+      dropzone.addEventListener('click', (e) => {
+        if (!e.target.closest('button')) fileInput.click();
+      });
+
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) processImageFile(e.target.files[0], "Loaded from file");
+      });
+
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
+        dropzone.addEventListener(name, (e) => {
+          e.preventDefault(); e.stopPropagation();
+          if(name === 'dragenter' || name === 'dragover') dropzone.classList.add('drag-over');
+          else dropzone.classList.remove('drag-over');
+        });
+      });
+
+      dropzone.addEventListener('drop', (e) => {
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          processImageFile(e.dataTransfer.files[0], "Dropped file");
+        }
+      });
+    }
+
+    function processImageFile(file, sourceLabel) {
+      if (!file || !file.type.startsWith('image/')) {
+        showToast('Please provide a valid image file', 'error'); return;
+      }
+      currentImageBlob = file;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        currentImageBase64 = e.target.result;
+        displayLoadedImage(currentImageBase64, sourceLabel);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function displayLoadedImage(base64Data, sourceLabel) {
+      const img = document.getElementById('viewportImg');
+      const placeholder = document.getElementById('viewportPlaceholder');
+      const container = document.getElementById('viewportContainer');
+
+      img.onload = () => {
+        const width = img.naturalWidth;
+        const height = img.naturalHeight;
+        document.getElementById('metaDimensions').textContent = `${width} × ${height} px`;
+        placeholder.style.display = 'none';
+        container.style.display = 'block';
+        showToast(`${sourceLabel} loaded`, 'success');
+      };
+      img.src = base64Data;
+    }
+
+    function clearLoadedImage() {
+      currentImageBase64 = null;
+      currentImageBlob = null;
+      document.getElementById('viewportImg').src = "";
+      document.getElementById('viewportContainer').style.display = 'none';
+      document.getElementById('viewportPlaceholder').style.display = 'flex';
+      showToast('Viewport cleared', 'info');
+    }
+
+    function loadSampleCadImage() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1280; canvas.height = 720;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = "#0f172a"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.15)"; ctx.lineWidth = 1;
+      
+      for (let i = 0; i <= canvas.width; i += 40) {
+        ctx.beginPath(); ctx.moveTo(i, 450); ctx.lineTo((i - 640) * 3 + 640, 720); ctx.stroke();
+      }
+      for (let y = 450; y <= 720; y += 25) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+      }
+
+      ctx.fillStyle = "rgba(226, 232, 240, 0.85)"; ctx.strokeStyle = "#38bdf8"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(380, 480); ctx.lineTo(680, 440); ctx.lineTo(680, 240); ctx.lineTo(380, 280);
+      ctx.closePath(); ctx.fillStyle = "#1e293b"; ctx.fill(); ctx.stroke();
+
+      ctx.beginPath(); ctx.moveTo(380, 280); ctx.lineTo(680, 240); ctx.lineTo(820, 280); ctx.lineTo(520, 320);
+      ctx.closePath(); ctx.fillStyle = "#334155"; ctx.fill(); ctx.stroke();
+
+      ctx.beginPath(); ctx.moveTo(680, 440); ctx.lineTo(820, 480); ctx.lineTo(820, 280); ctx.lineTo(680, 240);
+      ctx.closePath(); ctx.fillStyle = "#0f172a"; ctx.fill(); ctx.stroke();
+
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.5)"; ctx.lineWidth = 1.5;
+      for (let x = 410; x < 670; x += 45) {
+        ctx.beginPath(); ctx.moveTo(x, 280 + (x - 380) * (-40 / 300));
+        ctx.lineTo(x, 480 + (x - 380) * (-40 / 300)); ctx.stroke();
+      }
+
+      canvas.toBlob((blob) => { processImageFile(blob, "Loaded sample massing"); }, 'image/png');
+    }
+
+    async function runVisionSynthesis() {
+      const apiKey = localStorage.getItem('render_assistant_gemini_api_key');
+      const textA = document.getElementById('textA').value.trim();
+      const textB = document.getElementById('textB').value.trim();
+      const model = document.getElementById('geminiModelSelect').value;
+      const targetWords = document.getElementById('wordCountInput').value || "150";
+
+      if (!apiKey) { showToast('Please set your Google Gemini API Key first', 'error'); openSettingsModal(); return; }
+      if (!model) { showToast('Please wait for models to load or check your API key.', 'error'); return; }
+      if (!currentImageBase64) { showToast('Please paste a CAD reference image first', 'error'); return; }
+
+      const btn = document.getElementById('synthesizeBtn');
+      const btnText = document.getElementById('synthesizeBtnText');
+      btn.disabled = true;
+      btnText.innerHTML = `<span class="spinner"></span> Synthesizing...`;
+
+      try {
+        const base64Data = currentImageBase64.split(',')[1];
+        const mimeType = currentImageBlob ? currentImageBlob.type : 'image/png';
+
+        // NEW INSTRUCTION: Hyper-aggressive word count enforcement and expansion tactics
+        const systemInstruction = `You are a master architectural visualization director and expert generative prompt engineer.
+Analyze the structural geometry, spatial depth, camera perspective, horizon line, and architectural massing from the provided screenshot.
+Synthesize this with the user's Dynamic Request (Text A) and Baseline Rules (Text B).
+
+CRITICAL INSTRUCTIONS:
+1. Return EXACTLY ONE single, cohesive master prompt block starting with the text ===FINAL_PROMPT===.
+2. WORD COUNT ENFORCEMENT: Your output MUST be EXACTLY around ${targetWords} words long. This is a strict requirement.
+3. HOW TO ACHIEVE LENGTH: If ${targetWords} is a large number (e.g. > 100), you MUST heavily expand the description to reach the word count. Extensively describe micro-details: precise material textures (roughness, patina, grain), lighting fixtures, camera optics (e.g., 35mm lens, f/1.8, ISO 100, Hasselblad color science), atmospheric volumetric scattering, indirect light bounce, weather nuances, and specific environmental context. BE VERBOSE AND EXHAUSTIVE.
+4. This prompt MUST begin with a detailed, explicit description of the structural geometry, massing, and depth you see in the reference image.
+5. Immediately after describing the visual context, seamlessly integrate the Text A and Text B requirements. 
+6. Do NOT split the output into sections. Write one massive, highly descriptive, continuous flowing prompt.`;
+
+        const userPrompt = `Dynamic Request (Text A):\n${textA}\n\nPersistent Rules (Text B):\n${textB}\n\nGenerate the unified master prompt. CRITICAL: You must stretch and expand the descriptive language to hit the target of ~${targetWords} words.`;
+
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+        const payload = {
+          contents: [{
+            role: "user",
+            parts: [
+              { text: systemInstruction + "\n\n" + userPrompt },
+              { inlineData: { mimeType: mimeType, data: base64Data } }
+            ]
+          }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 2048 }
+        };
+
+        const response = await fetch(endpoint, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error?.message || `API Error ${response.status}`);
+        }
+
+        const data = await response.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) throw new Error('No text generated.');
+
+        parseAndDisplayOutput(rawText);
+        showToast('Master prompt synthesized successfully!', 'success');
+
+      } catch (err) {
+        console.error(err);
+        showToast(`Synthesis failed: ${err.message}`, 'error');
+      } finally {
+        btn.disabled = false;
+        btnText.textContent = "Synthesize Rendering Master Prompt";
+      }
+    }
+
+    function parseAndDisplayOutput(rawResponse) {
+      // Extract the prompt, removing the mandatory header and any markdown code blocks
+      let promptPart = rawResponse.replace(/===FINAL_PROMPT===/g, "").trim();
+      promptPart = promptPart.replace(/```[a-z]*\n?/g, "").trim();
+
+      activeSynthesizedPrompt = promptPart;
+
+      document.getElementById('emptyOutputState').style.display = 'none';
+      const display = document.getElementById('textContentDisplay');
+      display.style.display = 'block';
+      display.textContent = activeSynthesizedPrompt;
+
+      const words = activeSynthesizedPrompt.split(/\s+/).length;
+      document.getElementById('promptWordCount').textContent = `${words} words`;
+    }
+
+    async function copyImageToClipboard() {
+      if (!currentImageBase64) {
+        showToast('No reference image loaded to copy', 'error');
+        return;
+      }
+
+      try {
+        const img = document.getElementById('viewportImg');
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || 800;
+        canvas.height = img.naturalHeight || 600;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+
+        const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+
+        if (!navigator.clipboard || !navigator.clipboard.write) {
+          throw new Error('Clipboard image write not supported.');
+        }
+
+        const clipboardItem = new ClipboardItem({ 'image/png': pngBlob });
+        await navigator.clipboard.write([clipboardItem]);
+        showToast('Image copied to clipboard! (Ready for Gemini)', 'success');
+      } catch (err) {
+        console.warn('Clipboard write error:', err);
+        showToast('Direct image copy restricted by browser. You can right-click the image preview to copy.', 'error');
+      }
+    }
+
+    async function copySynthesizedPrompt() {
+      if (!activeSynthesizedPrompt) { showToast('No prompt synthesized yet!', 'error'); return; }
+      try {
+        await navigator.clipboard.writeText(activeSynthesizedPrompt);
+        showToast('Prompt copied to clipboard!', 'success');
+      } catch (err) {
+        const textarea = document.createElement('textarea');
+        textarea.value = activeSynthesizedPrompt; document.body.appendChild(textarea);
+        textarea.select(); document.execCommand('copy'); document.body.removeChild(textarea);
+        showToast('Prompt copied!', 'success');
+      }
+    }
+
+    function setupKeyboardShortcuts() {
+      window.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runVisionSynthesis(); }
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'C' || e.key === 'c')) { e.preventDefault(); copySynthesizedPrompt(); }
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'I' || e.key === 'i')) { e.preventDefault(); copyImageToClipboard(); }
+      });
+    }
+
+    function openSettingsModal() {
+      const modal = document.getElementById('settingsModal');
+      document.getElementById('apiKeyInput').value = localStorage.getItem('render_assistant_gemini_api_key') || '';
+      modal.classList.add('open');
+    }
+    function closeSettingsModal() { document.getElementById('settingsModal').classList.remove('open'); }
+
+    function saveApiKey() {
+      const key = document.getElementById('apiKeyInput').value.trim();
+      if (key) {
+        localStorage.setItem('render_assistant_gemini_api_key', key);
+        showToast('API key saved.', 'success');
+        fetchAvailableModels(key);
+      } else {
+        localStorage.removeItem('render_assistant_gemini_api_key');
+      }
+      updateApiKeyStatusDisplay();
+      closeSettingsModal();
+    }
+
+    function updateApiKeyStatusDisplay() {
+      const key = localStorage.getItem('render_assistant_gemini_api_key');
+      const dot = document.getElementById('apiKeyStatusDot');
+      const text = document.getElementById('apiKeyStatusText');
+      if (key && key.length > 5) { dot.classList.add('active'); text.textContent = 'API Key Active'; } 
+      else { dot.classList.remove('active'); text.textContent = 'Set API Key'; }
+    }
+
+    function openGuideModal() { document.getElementById('guideModal').classList.add('open'); }
+    function closeGuideModal() { document.getElementById('guideModal').classList.remove('open'); }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`; toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0'; toast.style.transform = 'translateY(10px) scale(0.95)';
+        setTimeout(() => toast.remove(), 200);
+      }, 3500);
+    }
+  </script>
+</body>
+</html>
